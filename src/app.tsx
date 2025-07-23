@@ -191,7 +191,8 @@ export const Application = () => {
                             for (const line of lines) {
                                 if (line.trim()) {
                                     const data = JSON.parse(line);
-                                    if (data.class === 'TPV' && data.lat && data.lon) {
+                                    // Fix: Check if lat and lon are defined numbers, not truthy (zero is valid)
+                                    if (data.class === 'TPV' && typeof data.lat === 'number' && typeof data.lon === 'number') {
                                         tpvData = data;
                                     }
                                     if (data.class === 'SKY' && data.satellites) {
@@ -207,13 +208,27 @@ export const Application = () => {
                                     skyData.satellites.reduce((best, sat) => 
                                         sat.ss > (best?.ss || 0) ? sat : best, null) : null;
                                 
+                                // Determine status based on coordinates and mode
+                                let gpsStatus = 'No fix';
+                                let modeString = 'No Fix';
+                                
+                                if (tpvData.mode >= 2) {
+                                    if (tpvData.lat === 0 && tpvData.lon === 0) {
+                                        gpsStatus = 'Fix acquired (Timing mode)';
+                                        modeString = tpvData.mode === 3 ? '3D Fix (No Position)' : '2D Fix (No Position)';
+                                    } else {
+                                        gpsStatus = 'Fix acquired';
+                                        modeString = tpvData.mode === 3 ? '3D Fix' : '2D Fix';
+                                    }
+                                }
+                                
                                 setGpsInfo({
-                                    status: tpvData.mode >= 2 ? 'Fix acquired' : 'No fix',
+                                    status: gpsStatus,
                                     satellites: satUsed.toString(),
                                     latitude: tpvData.lat.toFixed(6),
                                     longitude: tpvData.lon.toFixed(6),
                                     altitude: tpvData.alt ? tpvData.alt.toFixed(1) + 'm' : 'N/A',
-                                    mode: tpvData.mode === 3 ? '3D Fix' : tpvData.mode === 2 ? '2D Fix' : 'No Fix',
+                                    mode: modeString,
                                     hdop: skyData?.hdop ? skyData.hdop.toFixed(2) : 'N/A',
                                     pdop: skyData?.pdop ? skyData.pdop.toFixed(2) : 'N/A',
                                     vdop: skyData?.vdop ? skyData.vdop.toFixed(2) : 'N/A',
@@ -410,6 +425,21 @@ export const Application = () => {
                         />
                         {gpsInfo.latitude !== 'N/A' && (
                             <div style={{marginTop: '10px', fontSize: '0.9em'}}>
+                                {parseFloat(gpsInfo.latitude) === 0 && parseFloat(gpsInfo.longitude) === 0 && (
+                                    <div style={{
+                                        marginBottom: '10px', 
+                                        padding: '8px', 
+                                        backgroundColor: '#e1f5fe', 
+                                        border: '1px solid #81d4fa', 
+                                        borderRadius: '4px',
+                                        fontSize: '0.85em',
+                                        color: '#0d47a1'
+                                    }}>
+                                        <strong>ℹ️ Timing Mode:</strong> This GPS receiver is operating in timing-only mode. 
+                                        It provides accurate time synchronization but no position data. 
+                                        This is normal for timing-focused GPS modules like the u-blox LEA-6T.
+                                    </div>
+                                )}
                                 <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px'}}>
                                     <div>
                                         <strong>Position:</strong><br/>
